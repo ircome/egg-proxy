@@ -1,4 +1,4 @@
-name: Build and publish EPG
+name: Build and publish EPG via Schedules Direct
 
 on:
   schedule:
@@ -11,26 +11,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - name: Python installieren
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - run: pip install requests lxml
+      - name: Dependencies installieren
+        run: |
+          pip install requests lxml
 
-      - name: EPG herunterladen
+      - name: Schedules Direct Grabber installieren
+        run: |
+          pip install sdjson
+
+      - name: EPG von Schedules Direct laden
+        env:
+          SD_USERNAME: ${{ secrets.SD_USERNAME }}
+          SD_PASSWORD: ${{ secrets.SD_PASSWORD }}
         run: |
           mkdir -p public
-          python3 <<'PYCODE'
-          import requests, gzip, shutil
-
-          URL = "https://epgshare01.online/epgshare01/epg_rip.xml.gz"
-          print(f"Fetching {URL}")
-          r = requests.get(URL, timeout=300, headers={"User-Agent": "Mozilla/5.0"})
-          r.raise_for_status()
-          with open('public/full_epg.xml.gz','wb') as f:
-              f.write(r.content)
-          print("Downloaded", len(r.content), "bytes")
-          PYCODE
+          # Login und Konfiguration
+          sdjson config --username "$SD_USERNAME" --password "$SD_PASSWORD"
+          # EPG-Daten ziehen (Standard: 7 Tage)
+          sdjson lineup add DE
+          sdjson lineup add AT
+          sdjson lineup add CH
+          sdjson lineup add IT
+          sdjson download
+          # Aus JSON eine XMLTV-Datei erzeugen
+          sdjson export xmltv > public/full_epg.xml
+          # Komprimieren
+          gzip -f public/full_epg.xml
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
