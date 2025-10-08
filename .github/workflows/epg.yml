@@ -34,7 +34,6 @@ jobs:
               "https://epg.best/italy.xml",
           ]
 
-          # Mappings: häufige deutsche Sendernamen anpassen
           MAPPINGS = {
               "DasErste.de": "Das Erste DE",
               "ZDF.de": "ZDF DE",
@@ -98,9 +97,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          # aktuellen Stand holen um Konflikte zu vermeiden
           git fetch origin main
-          git reset --soft origin/main
+          git checkout main
           git add out/full_epg.xml.gz
           git commit -m "Update EPG feed" || echo "Keine Änderungen"
-          git push origin HEAD:main
+          git push --force origin main
