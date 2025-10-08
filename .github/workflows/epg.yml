@@ -19,9 +19,6 @@ jobs:
       - name: Dependencies installieren
         run: |
           pip install requests lxml
-
-      - name: Schedules Direct Grabber installieren
-        run: |
           pip install sdjson
 
       - name: EPG von Schedules Direct laden
@@ -30,17 +27,10 @@ jobs:
           SD_PASSWORD: ${{ secrets.SD_PASSWORD }}
         run: |
           mkdir -p public
-          # Login und Konfiguration
-          sdjson config --username "$SD_USERNAME" --password "$SD_PASSWORD"
-          # EPG-Daten ziehen (Standard: 7 Tage)
-          sdjson lineup add DE
-          sdjson lineup add AT
-          sdjson lineup add CH
-          sdjson lineup add IT
-          sdjson download
-          # Aus JSON eine XMLTV-Datei erzeugen
-          sdjson export xmltv > public/full_epg.xml
-          # Komprimieren
+          # Login bei Schedules Direct
+          tv_grab_sd_json --configure --username "$SD_USERNAME" --password "$SD_PASSWORD" --no-interactive
+          # Download der Programmdaten (Standard: 7 Tage)
+          tv_grab_sd_json --days 7 --output public/full_epg.xml
           gzip -f public/full_epg.xml
 
       - name: Deploy to GitHub Pages
