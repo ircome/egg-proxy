@@ -2,8 +2,8 @@ name: Build and publish EPG
 
 on:
   schedule:
-    - cron: '0 3 * * *'
-  workflow_dispatch:
+    - cron: '0 3 * * *'   # läuft jeden Tag um 03:00 Uhr
+  workflow_dispatch:      # manuell starten möglich
 
 jobs:
   build:
@@ -24,13 +24,15 @@ jobs:
           import requests, gzip
           from lxml import etree
 
+          # Aktuelle funktionierende EPG-Feeds von iptv-org
           SOURCES = [
-              "https://epg.best/germany.xml",
-              "https://epg.best/austria.xml",
-              "https://epg.best/switzerland.xml",
-              "https://epg.best/italy.xml",
+              "https://iptv-org.github.io/epg/guides/de.xml",
+              "https://iptv-org.github.io/epg/guides/at.xml",
+              "https://iptv-org.github.io/epg/guides/ch.xml",
+              "https://iptv-org.github.io/epg/guides/it.xml"
           ]
 
+          # Optional: Kanal-ID Anpassungen für DE
           MAPPINGS = {
               "DasErste.de": "Das Erste DE",
               "ZDF.de": "ZDF DE",
@@ -49,9 +51,10 @@ jobs:
 
           def fetch(url):
               print(f"Fetching {url}")
-              r = requests.get(url, timeout=60)
+              r = requests.get(url, timeout=120, headers={"User-Agent": "Mozilla/5.0"})
               r.raise_for_status()
               data = r.content
+              # Einige iptv-org Feeds sind gzip-komprimiert
               if data[:2] == b'\x1f\x8b':
                   data = gzip.decompress(data)
               return data
@@ -65,11 +68,12 @@ jobs:
                   root = etree.fromstring(xml_data)
                   for ch in root.findall('channel'):
                       cid = ch.get('id')
-                      if cid in MAPPINGS:
-                          ch.set('id', MAPPINGS[cid])
-                          cid = MAPPINGS[cid]
-                      if cid not in channels:
-                          channels[cid] = ch
+                      if cid:
+                          if cid in MAPPINGS:
+                              ch.set('id', MAPPINGS[cid])
+                              cid = MAPPINGS[cid]
+                          if cid not in channels:
+                              channels[cid] = ch
                   for prog in root.findall('programme'):
                       cid = prog.get('channel')
                       if cid in MAPPINGS:
