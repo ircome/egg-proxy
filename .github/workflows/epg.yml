@@ -1,14 +1,105 @@
-sources:
-  - url: https://epg.pw/xmltv/epg.xml
-  - url: https://epg.best/germany.xml
-  - url: https://epg.best/italy.xml
-mappings:
-  # Beispielhafte ID-Anpassungen
-  - from: "DasErste.de"
-    to: "Das Erste DE"
-  - from: "ZDF.de"
-    to: "ZDF DE"
-  - from: "ARDalpha.de"
-    to: "ARD-alpha DE"
-  - from: "Tagesschau24.de"
-    to: "tagesschau24 DE"
+name: Build and update EPG
+
+on:
+  schedule:
+    - cron: '0 3 * * *'    # täglich um 03:00 Uhr
+  workflow_dispatch:       # manuelles Starten möglich
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Dependencies installieren
+        run: pip install requests lxml
+
+      - name: EPG herunterladen und kombinieren
+        run: |
+          mkdir -p out
+          python3 <<'PYCODE'
+          import requests, gzip, shutil, io
+          from lxml import etree
+
+          SOURCES = [
+              "https://epg.pw/xmltv/epg.xml",
+              "https://epg.best/germany.xml",
+              "https://epg.best/italy.xml",
+              "https://epg.best/switzerland.xml",
+              "https://epg.best/austria.xml",
+          ]
+
+          # Mappings: häufige DE-Sender
+          MAPPINGS = {
+              "DasErste.de": "Das Erste DE",
+              "ZDF.de": "ZDF DE",
+              "ARDalpha.de": "ARD-alpha DE",
+              "Tagesschau24.de": "tagesschau24 DE",
+              "RTL.de": "RTL DE",
+              "Sat1.de": "SAT.1 DE",
+              "ProSieben.de": "ProSieben DE",
+              "VOX.de": "VOX DE",
+              "Kabel1.de": "Kabel Eins DE",
+              "N24.de": "N24 DE",
+              "n-tv.de": "n-tv DE",
+              "3sat.de": "3sat DE",
+              "arte.de": "ARTE DE",
+          }
+
+          def fetch(url):
+              print(f"Fetching {url}")
+              r = requests.get(url, timeout=60)
+              r.raise_for_status()
+              data = r.content
+              if data[:2] == b'\x1f\x8b':
+                  data = gzip.decompress(data)
+              return data
+
+          channels = {}
+          programmes = []
+
+          for url in SOURCES:
+              try:
+                  xml_data = fetch(url)
+                  root = etree.fromstring(xml_data)
+                  for ch in root.findall('channel'):
+                      cid = ch.get('id')
+                      if cid:
+                          # Mapping anwenden
+                          if cid in MAPPINGS:
+                              cid = MAPPINGS[cid]
+                              ch.set('id', cid)
+                          if cid not in channels:
+                              channels[cid] = ch
+                  for prog in root.findall('programme'):
+                      cid = prog.get('channel')
+                      if cid in MAPPINGS:
+                          prog.set('channel', MAPPINGS[cid])
+                      programmes.append(prog)
+              except Exception as e:
+                  print("Warn:", url, e)
+
+          tv = etree.Element('tv', attrib={"source-info-name": "Combined EPG"})
+          for ch in channels.values():
+              tv.append(ch)
+          for p in programmes:
+              tv.append(p)
+
+          out = etree.tostring(tv, pretty_print=True, xml_declaration=True, encoding='utf-8')
+          with open('out/full_epg.xml', 'wb') as f:
+              f.write(out)
+          PYCODE
+
+      - name: Commit & Push EPG
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add out/full_epg.xml
+          git commit -m "Update EPG feed" || echo "Keine Änderungen"
+          git push
