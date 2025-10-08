@@ -24,18 +24,16 @@ jobs:
         run: |
           mkdir -p out
           python3 <<'PYCODE'
-          import requests, gzip, shutil, io
+          import requests, gzip
           from lxml import etree
 
           SOURCES = [
-              "https://epg.pw/xmltv/epg.xml",
               "https://epg.best/germany.xml",
-              "https://epg.best/italy.xml",
-              "https://epg.best/switzerland.xml",
               "https://epg.best/austria.xml",
+              "https://epg.best/switzerland.xml",
+              "https://epg.best/italy.xml",
           ]
 
-          # Mappings: häufige DE-Sender
           MAPPINGS = {
               "DasErste.de": "Das Erste DE",
               "ZDF.de": "ZDF DE",
@@ -57,7 +55,7 @@ jobs:
               r = requests.get(url, timeout=60)
               r.raise_for_status()
               data = r.content
-              if data[:2] == b'\x1f\x8b':
+              if data[:2] == b'\x1f\x8b':  # gzipped
                   data = gzip.decompress(data)
               return data
 
@@ -71,10 +69,9 @@ jobs:
                   for ch in root.findall('channel'):
                       cid = ch.get('id')
                       if cid:
-                          # Mapping anwenden
                           if cid in MAPPINGS:
+                              ch.set('id', MAPPINGS[cid])
                               cid = MAPPINGS[cid]
-                              ch.set('id', cid)
                           if cid not in channels:
                               channels[cid] = ch
                   for prog in root.findall('programme'):
@@ -92,7 +89,7 @@ jobs:
               tv.append(p)
 
           out = etree.tostring(tv, pretty_print=True, xml_declaration=True, encoding='utf-8')
-          with open('out/full_epg.xml', 'wb') as f:
+          with gzip.open('out/full_epg.xml.gz', 'wb') as f:
               f.write(out)
           PYCODE
 
@@ -100,6 +97,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add out/full_epg.xml
+          git add out/full_epg.xml.gz
           git commit -m "Update EPG feed" || echo "Keine Änderungen"
           git push
