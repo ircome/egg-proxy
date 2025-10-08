@@ -11,15 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Python installieren
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Dependencies installieren
+      - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y xmltv python3-pip
           pip install requests lxml
-          pip install sdjson
 
       - name: EPG von Schedules Direct laden
         env:
@@ -27,9 +23,9 @@ jobs:
           SD_PASSWORD: ${{ secrets.SD_PASSWORD }}
         run: |
           mkdir -p public
-          # Login bei Schedules Direct
+          # Konfiguration anlegen (non-interactive)
           tv_grab_sd_json --configure --username "$SD_USERNAME" --password "$SD_PASSWORD" --no-interactive
-          # Download der Programmdaten (Standard: 7 Tage)
+          # 7 Tage EPG ziehen
           tv_grab_sd_json --days 7 --output public/full_epg.xml
           gzip -f public/full_epg.xml
 
