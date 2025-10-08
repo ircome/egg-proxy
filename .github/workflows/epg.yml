@@ -2,8 +2,8 @@ name: Build and publish EPG
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # läuft jeden Tag um 03:00 Uhr
-  workflow_dispatch:      # manuell starten möglich
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,80 +17,19 @@ jobs:
 
       - run: pip install requests lxml
 
-      - name: EPG bauen
+      - name: EPG herunterladen
         run: |
           mkdir -p public
           python3 <<'PYCODE'
-          import requests, gzip
-          from lxml import etree
+          import requests, gzip, shutil
 
-          # Aktuelle funktionierende EPG-Feeds von iptv-org
-          SOURCES = [
-              "https://iptv-org.github.io/epg/guides/de.xml",
-              "https://iptv-org.github.io/epg/guides/at.xml",
-              "https://iptv-org.github.io/epg/guides/ch.xml",
-              "https://iptv-org.github.io/epg/guides/it.xml"
-          ]
-
-          # Optional: Kanal-ID Anpassungen für DE
-          MAPPINGS = {
-              "DasErste.de": "Das Erste DE",
-              "ZDF.de": "ZDF DE",
-              "ARDalpha.de": "ARD-alpha DE",
-              "Tagesschau24.de": "tagesschau24 DE",
-              "RTL.de": "RTL DE",
-              "Sat1.de": "SAT.1 DE",
-              "ProSieben.de": "ProSieben DE",
-              "VOX.de": "VOX DE",
-              "Kabel1.de": "Kabel Eins DE",
-              "N24.de": "N24 DE",
-              "n-tv.de": "n-tv DE",
-              "3sat.de": "3sat DE",
-              "arte.de": "ARTE DE",
-          }
-
-          def fetch(url):
-              print(f"Fetching {url}")
-              r = requests.get(url, timeout=120, headers={"User-Agent": "Mozilla/5.0"})
-              r.raise_for_status()
-              data = r.content
-              # Einige iptv-org Feeds sind gzip-komprimiert
-              if data[:2] == b'\x1f\x8b':
-                  data = gzip.decompress(data)
-              return data
-
-          channels = {}
-          programmes = []
-
-          for url in SOURCES:
-              try:
-                  xml_data = fetch(url)
-                  root = etree.fromstring(xml_data)
-                  for ch in root.findall('channel'):
-                      cid = ch.get('id')
-                      if cid:
-                          if cid in MAPPINGS:
-                              ch.set('id', MAPPINGS[cid])
-                              cid = MAPPINGS[cid]
-                          if cid not in channels:
-                              channels[cid] = ch
-                  for prog in root.findall('programme'):
-                      cid = prog.get('channel')
-                      if cid in MAPPINGS:
-                          prog.set('channel', MAPPINGS[cid])
-                      programmes.append(prog)
-              except Exception as e:
-                  print("Warn:", url, e)
-
-          tv = etree.Element('tv', attrib={"source-info-name": "Combined EPG"})
-          for ch in channels.values():
-              tv.append(ch)
-          for p in programmes:
-              tv.append(p)
-
-          out = etree.tostring(tv, pretty_print=True, xml_declaration=True, encoding='utf-8')
-          with gzip.open('public/full_epg.xml.gz', 'wb') as f:
-              f.write(out)
+          URL = "https://epgshare01.online/epgshare01/epg_rip.xml.gz"
+          print(f"Fetching {URL}")
+          r = requests.get(URL, timeout=300, headers={"User-Agent": "Mozilla/5.0"})
+          r.raise_for_status()
+          with open('public/full_epg.xml.gz','wb') as f:
+              f.write(r.content)
+          print("Downloaded", len(r.content), "bytes")
           PYCODE
 
       - name: Deploy to GitHub Pages
