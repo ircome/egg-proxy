@@ -1,28 +1,25 @@
-name: Build and update EPG
+name: Build and publish EPG
 
 on:
   schedule:
-    - cron: '0 3 * * *'    # täglich um 03:00 Uhr
-  workflow_dispatch:       # manuelles Starten möglich
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Repository auschecken
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Python installieren
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Dependencies installieren
-        run: pip install requests lxml
+      - run: pip install requests lxml
 
-      - name: EPG herunterladen und kombinieren
+      - name: EPG bauen
         run: |
-          mkdir -p out
+          mkdir -p public
           python3 <<'PYCODE'
           import requests, gzip
           from lxml import etree
@@ -55,7 +52,7 @@ jobs:
               r = requests.get(url, timeout=60)
               r.raise_for_status()
               data = r.content
-              if data[:2] == b'\x1f\x8b':  # gzipped
+              if data[:2] == b'\x1f\x8b':
                   data = gzip.decompress(data)
               return data
 
@@ -68,12 +65,11 @@ jobs:
                   root = etree.fromstring(xml_data)
                   for ch in root.findall('channel'):
                       cid = ch.get('id')
-                      if cid:
-                          if cid in MAPPINGS:
-                              ch.set('id', MAPPINGS[cid])
-                              cid = MAPPINGS[cid]
-                          if cid not in channels:
-                              channels[cid] = ch
+                      if cid in MAPPINGS:
+                          ch.set('id', MAPPINGS[cid])
+                          cid = MAPPINGS[cid]
+                      if cid not in channels:
+                          channels[cid] = ch
                   for prog in root.findall('programme'):
                       cid = prog.get('channel')
                       if cid in MAPPINGS:
@@ -89,16 +85,12 @@ jobs:
               tv.append(p)
 
           out = etree.tostring(tv, pretty_print=True, xml_declaration=True, encoding='utf-8')
-          with gzip.open('out/full_epg.xml.gz', 'wb') as f:
+          with gzip.open('public/full_epg.xml.gz', 'wb') as f:
               f.write(out)
           PYCODE
 
-      - name: Commit & Push EPG
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git fetch origin main
-          git checkout main
-          git add out/full_epg.xml.gz
-          git commit -m "Update EPG feed" || echo "Keine Änderungen"
-          git push --force origin main
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
