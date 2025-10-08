@@ -1,0 +1,14 @@
+sources:
+  - url: https://epg.pw/xmltv/epg.xml
+  - url: https://epg.best/germany.xml
+  - url: https://epg.best/italy.xml
+mappings:
+  # Beispielhafte ID-Anpassungen
+  - from: "DasErste.de"
+    to: "Das Erste DE"
+  - from: "ZDF.de"
+    to: "ZDF DE"
+  - from: "ARDalpha.de"
+    to: "ARD-alpha DE"
+  - from: "Tagesschau24.de"
+    to: "tagesschau24 DE"
